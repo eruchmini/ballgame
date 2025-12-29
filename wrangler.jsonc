@@ -1,0 +1,7 @@
+{
+  "name": "ball-dodge-game",
+  "compatibility_date": "2025-12-29",
+  "assets": {
+    "directory": "./dist"
+  }
+}
