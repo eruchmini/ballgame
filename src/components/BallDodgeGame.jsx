@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GAME_CONFIG } from '../game/constants';
 import { FallingBall } from '../game/classes/FallingBall';
 import { Boss } from '../game/classes/Boss';
+import { Bug } from '../game/classes/Bug';
 import { AudioSystem } from '../game/audio/sounds';
 import { MultiplayerManager } from '../game/multiplayer/websocket';
 import {
@@ -67,6 +68,8 @@ const BallDodgeGame = () => {
   const currentScoreRef = useRef(0);
   const dangerZonesRef = useRef([]);
   const bossDefeatedRef = useRef(false);
+  const bugsRef = useRef([]);
+  const lastBugSpawnRef = useRef(0);
 
   // Multiplayer refs
   const playerIdRef = useRef(Math.random().toString(36).substr(2, 9));
@@ -364,6 +367,14 @@ const BallDodgeGame = () => {
         lastSpawn = timestamp;
       }
 
+      // Spawn bugs every 10 seconds
+      if (timestamp - lastBugSpawnRef.current > 10000) {
+        const canvas = canvasRef.current;
+        const fromLeft = Math.random() < 0.5; // 50% chance from left or right
+        bugsRef.current.push(new Bug(canvas, fromLeft));
+        lastBugSpawnRef.current = timestamp;
+      }
+
       // Boss logic
       if (score >= GAME_CONFIG.SCORING.BOSS_SPAWN_THRESHOLD && !bossSpawnedRef.current && !bossRef.current) {
         bossSpawnedRef.current = true;
@@ -408,6 +419,9 @@ const BallDodgeGame = () => {
 
       // Update and draw balls
       updateAndDrawBalls(ctx, audioSystem);
+
+      // Update and draw bugs
+      updateAndDrawBugs(ctx);
 
       // Score increment
       if (timestamp - lastScoreUpdate > 1000) {
@@ -752,6 +766,37 @@ const BallDodgeGame = () => {
       });
     };
 
+    const updateAndDrawBugs = (ctx) => {
+      bugsRef.current = bugsRef.current.filter(bug => {
+        bug.update(canvasRef.current, playerRef);
+        bug.draw(ctx);
+
+        // Check if the bug has grabbed the player
+        if (bug.hasGrabbedPlayer && bug.grabbedPlayer) {
+          // Disable player movement when grabbed
+          // Check if bug has dragged player off screen
+          if (bug.isOffScreen(canvasRef.current)) {
+            // Game over! You've been dragged off screen!
+            setGameOver(true);
+            audioSystemRef.current.playGameOverSound();
+            audioSystemRef.current.playGameOverMelody();
+            audioSystemRef.current.stopBackgroundMusic();
+            audioSystemRef.current.stopBossMusic();
+            multiplayerRef.current?.broadcastPlayerDied();
+            return false;
+          }
+          return true; // Keep the bug while it's dragging the player
+        }
+
+        // Remove bugs that have crawled off screen
+        if (bug.isOffScreen(canvasRef.current)) {
+          return false;
+        }
+
+        return true;
+      });
+    };
+
     const handlePlayerHit = (instant, audioSystem) => {
       if (instant) {
         setGameOver(true);
@@ -828,6 +873,8 @@ const BallDodgeGame = () => {
     bossDefeatedRef.current = false;
     dangerZonesRef.current = [];
     otherBlastsRef.current = [];
+    bugsRef.current = [];
+    lastBugSpawnRef.current = 0;
     playerRef.current = {
       x: window.innerWidth / 2,
       y: window.innerHeight - 50,
