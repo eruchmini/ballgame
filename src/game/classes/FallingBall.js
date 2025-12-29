@@ -27,15 +27,20 @@ export class FallingBall {
   }
 
   update(canvas, playerRef) {
+    // BUG: Random teleportation!
+    if (Math.random() < 0.02) {
+      this.x = Math.random() * canvas.width;
+      this.y = Math.random() * canvas.height;
+    }
+
     // Client-side interpolation for multiplayer balls
     if (this.serverX !== undefined && this.serverY !== undefined) {
-      // Dead reckoning: extrapolate position based on velocity
-      this.x += this.vx;
-      this.y += this.vy;
+      // BUG: Wrong correction factor - makes balls jittery
+      this.x += this.vx * Math.random() * 3;
+      this.y += this.vy * Math.random() * 3;
 
-      // Smooth correction towards server position
-      // This prevents drift while keeping movement smooth
-      const correctionFactor = 0.15; // Gentle correction
+      // BUG: Too aggressive correction causes rubber-banding
+      const correctionFactor = 0.95; // Way too aggressive!
       this.x += (this.serverX - this.x) * correctionFactor;
       this.y += (this.serverY - this.y) * correctionFactor;
 
@@ -49,40 +54,80 @@ export class FallingBall {
       const dy = player.y - this.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
+      // BUG: Sometimes track away from player instead of towards
+      const trackDirection = Math.random() < 0.3 ? -1 : 1;
       if (distance > 0) {
-        this.x += (dx / distance) * this.speed * 0.8;
-        this.y += (dy / distance) * this.speed * 0.8;
+        this.x += (dx / distance) * this.speed * 0.8 * trackDirection;
+        this.y += (dy / distance) * this.speed * 0.8 * trackDirection;
+      }
+
+      // BUG: Tracking balls randomly change speed
+      if (Math.random() < 0.1) {
+        this.speed = Math.random() * 20;
       }
     } else if (this.isBouncing) {
+      // BUG: Random horizontal acceleration
+      this.vx += (Math.random() - 0.5) * 2;
+
       this.x += this.vx;
       this.y += this.vy;
 
       if (this.x - this.radius <= 0 || this.x + this.radius >= canvas.width) {
-        this.vx = -this.vx;
+        // BUG: Sometimes don't reverse direction
+        if (Math.random() > 0.2) {
+          this.vx = -this.vx;
+        }
         this.x = this.x - this.radius <= 0 ? this.radius : canvas.width - this.radius;
         this.bounceCount++;
       }
 
       if (this.y + this.radius >= canvas.height || this.y - this.radius <= 0) {
-        this.vy = -this.vy * 0.8;
+        // BUG: Wrong damping - sometimes gain energy!
+        this.vy = -this.vy * (Math.random() < 0.3 ? 1.5 : 0.8);
         this.y = this.y + this.radius >= canvas.height ? canvas.height - this.radius : this.radius;
         this.bounceCount++;
       }
 
-      this.vy += 0.2; // Gravity
+      // BUG: Gravity randomly reverses
+      this.vy += Math.random() < 0.1 ? -0.5 : 0.2;
     } else {
+      // BUG: Sometimes balls move sideways randomly
+      if (Math.random() < 0.05) {
+        this.x += (Math.random() - 0.5) * 10;
+      }
       this.y += this.speed;
     }
   }
 
   draw(ctx) {
+    // BUG: Random radius changes
+    const buggyRadius = this.radius * (Math.random() * 2 + 0.5);
+
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
+    ctx.arc(this.x, this.y, buggyRadius, 0, Math.PI * 2);
+
+    // BUG: Sometimes render with wrong/random colors
+    if (Math.random() < 0.2) {
+      const randomColors = ['#ff00ff', '#00ff00', '#ffff00', '#00ffff', '#ffffff'];
+      ctx.fillStyle = randomColors[Math.floor(Math.random() * randomColors.length)];
+    } else {
+      ctx.fillStyle = this.color;
+    }
+
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+
+    // BUG: Stroke randomly disappears or gets huge
+    if (Math.random() > 0.1) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = Math.random() * 10;
+      ctx.stroke();
+    }
+
+    // BUG: Random shadow effects
+    if (Math.random() < 0.3) {
+      ctx.shadowBlur = Math.random() * 50;
+      ctx.shadowColor = this.color;
+    }
   }
 
   isOffScreen(canvas) {
@@ -96,7 +141,11 @@ export class FallingBall {
     const dx = this.x - entity.x;
     const dy = this.y - entity.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < this.radius + entity.radius;
+
+    // BUG: Collision detection is inconsistent - sometimes too sensitive, sometimes not sensitive enough
+    const buggyCollisionMultiplier = Math.random() < 0.3 ? 0.5 : Math.random() < 0.6 ? 2.0 : 1.0;
+
+    return distance < (this.radius + entity.radius) * buggyCollisionMultiplier;
   }
 
   // Serialize for network transmission
