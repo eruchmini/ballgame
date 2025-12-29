@@ -195,7 +195,7 @@ const BallDodgeGame = () => {
 
     // Spawn ball function
     const spawnBall = (speedMultiplier) => {
-      if (!gameOver && !bossSpawnedRef.current && isGameMasterRef.current) {
+      if (!gameOver && !bossRef.current && isGameMasterRef.current) {
         const rand = Math.random();
         const isShield = rand < GAME_CONFIG.BALL.SHIELD_SPAWN_CHANCE;
         const isTracking = !isShield && rand < (GAME_CONFIG.BALL.SHIELD_SPAWN_CHANCE + GAME_CONFIG.BALL.TRACKING_SPAWN_CHANCE);
@@ -364,8 +364,8 @@ const BallDodgeGame = () => {
         lastSpawn = timestamp;
       }
 
-      // Boss logic
-      if (score >= GAME_CONFIG.SCORING.BOSS_SPAWN_THRESHOLD && !bossSpawnedRef.current && !bossRef.current) {
+      // Boss logic - spawn boss only once per game
+      if (score >= GAME_CONFIG.SCORING.BOSS_SPAWN_THRESHOLD && !bossSpawnedRef.current && !bossRef.current && !bossDefeatedRef.current) {
         bossSpawnedRef.current = true;
         setBossActive(true);
         bossRef.current = new Boss(
@@ -554,21 +554,6 @@ const BallDodgeGame = () => {
             setScore(prev => {
               const newScore = prev + points;
               currentScoreRef.current = newScore;
-              if (newScore >= GAME_CONFIG.SCORING.BOSS_SPAWN_THRESHOLD && !bossSpawnedRef.current && !bossDefeatedRef.current) {
-                bossSpawnedRef.current = true;
-                setBossActive(true);
-                bossRef.current = new Boss(
-                  canvas,
-                  playerRef,
-                  explosionsRef,
-                  impactParticlesRef,
-                  dangerZonesRef,
-                  () => audioSystem.playExplosionSound()
-                );
-                ballsRef.current = [];
-                audioSystem.stopBackgroundMusic();
-                audioSystem.startBossMusic(() => gameOver);
-              }
               return newScore;
             });
 
@@ -613,7 +598,6 @@ const BallDodgeGame = () => {
               });
               setBossActive(false);
               bossRef.current = null;
-              bossSpawnedRef.current = false;
               bossDefeatedRef.current = true;
 
               audioSystem.stopBossMusic();
