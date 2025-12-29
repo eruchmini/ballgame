@@ -50,6 +50,32 @@ export const GAME_CONFIG = {
   UPGRADE: {
     MULTI_SHOT_COOLDOWN: 1000, // 1 second
     TRACKING_DURATION_PER_LEVEL: 500, // 0.5s per level
+    TYPES: {
+      SPEED: {
+        id: 'speed',
+        name: '🚀 Speed +10%',
+        rarity: 'common',
+        weight: 50,
+      },
+      MULTI_SHOT: {
+        id: 'multiShot',
+        name: '💥 Multi-Shot',
+        rarity: 'common',
+        weight: 50,
+      },
+      EXPLOSION: {
+        id: 'explosion',
+        name: '💣 Bigger Explosions +50%',
+        rarity: 'uncommon',
+        weight: 30,
+      },
+      TRACKING: {
+        id: 'tracking',
+        name: '🎯 Bullet Tracking 0.5s',
+        rarity: 'rare',
+        weight: 5,
+      },
+    },
   },
 
   SCORING: {

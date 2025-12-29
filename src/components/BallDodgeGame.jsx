@@ -15,6 +15,7 @@ import {
   drawExplosions,
   drawDangerZones
 } from '../game/particles/particles';
+import { selectRandomUpgrades } from '../game/upgradeUtils';
 import { GameUI } from './GameUI';
 import { UpgradeMenu } from './UpgradeMenu';
 import { GameOver } from './GameOver';
@@ -29,6 +30,7 @@ const BallDodgeGame = () => {
   const [hasShield, setHasShield] = useState(false);
   const [upgradePoints, setUpgradePoints] = useState(0);
   const [showUpgradeMenu, setShowUpgradeMenu] = useState(false);
+  const [availableUpgrades, setAvailableUpgrades] = useState([]);
   const [speedUpgrades, setSpeedUpgrades] = useState(0);
   const [doubleClickUpgrades, setDoubleClickUpgrades] = useState(0);
   const [explosionUpgrades, setExplosionUpgrades] = useState(0);
@@ -415,6 +417,14 @@ const BallDodgeGame = () => {
           const newScore = prev + GAME_CONFIG.SCORING.POINTS_PER_SECOND;
           if (Math.floor(newScore / GAME_CONFIG.SCORING.UPGRADE_POINT_INTERVAL) > Math.floor(lastScoreCheckRef.current / GAME_CONFIG.SCORING.UPGRADE_POINT_INTERVAL)) {
             setUpgradePoints(points => points + 1);
+            // Generate 2 random upgrades based on rarity
+            const upgrades = selectRandomUpgrades(2, {
+              speed: speedUpgradesRef.current,
+              multiShot: doubleClickUpgradesRef.current,
+              explosion: explosionUpgradesRef.current,
+              tracking: trackingUpgradesRef.current
+            });
+            setAvailableUpgrades(upgrades);
             setShowUpgradeMenu(true);
             setPaused(true);
           }
@@ -890,6 +900,25 @@ const BallDodgeGame = () => {
     }
   };
 
+  const handleUpgradeSelect = (upgradeId) => {
+    switch (upgradeId) {
+      case 'speed':
+        buySpeedUpgrade();
+        break;
+      case 'multiShot':
+        buyDoubleClickUpgrade();
+        break;
+      case 'explosion':
+        buyExplosionUpgrade();
+        break;
+      case 'tracking':
+        buyTrackingUpgrade();
+        break;
+      default:
+        break;
+    }
+  };
+
   const toggleMusic = () => {
     const newMusicState = !musicEnabled;
     setMusicEnabled(newMusicState);
@@ -922,10 +951,8 @@ const BallDodgeGame = () => {
           doubleClickUpgrades={doubleClickUpgrades}
           explosionUpgrades={explosionUpgrades}
           trackingUpgrades={trackingUpgrades}
-          buySpeedUpgrade={buySpeedUpgrade}
-          buyDoubleClickUpgrade={buyDoubleClickUpgrade}
-          buyExplosionUpgrade={buyExplosionUpgrade}
-          buyTrackingUpgrade={buyTrackingUpgrade}
+          availableUpgrades={availableUpgrades}
+          onUpgradeSelect={handleUpgradeSelect}
           onClose={() => setShowUpgradeMenu(false)}
         />
       )}
