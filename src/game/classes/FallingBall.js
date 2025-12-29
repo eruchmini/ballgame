@@ -27,6 +27,22 @@ export class FallingBall {
   }
 
   update(canvas, playerRef) {
+    // Client-side interpolation for multiplayer balls
+    if (this.serverX !== undefined && this.serverY !== undefined) {
+      // Dead reckoning: extrapolate position based on velocity
+      this.x += this.vx;
+      this.y += this.vy;
+
+      // Smooth correction towards server position
+      // This prevents drift while keeping movement smooth
+      const correctionFactor = 0.15; // Gentle correction
+      this.x += (this.serverX - this.x) * correctionFactor;
+      this.y += (this.serverY - this.y) * correctionFactor;
+
+      return; // Skip normal physics for network-synced balls
+    }
+
+    // Normal physics for game master's authoritative balls
     if (this.isTracking) {
       const player = playerRef.current;
       const dx = player.x - this.x;

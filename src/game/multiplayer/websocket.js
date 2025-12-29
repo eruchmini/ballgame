@@ -169,11 +169,25 @@ export class MultiplayerManager {
       data.balls.forEach(ballData => {
         const ball = this.ballsRef.current.find(b => b.id === ballData.id);
         if (ball) {
-          // Smooth update - lerp towards server position
-          ball.x = ball.x * 0.7 + ballData.x * 0.3;
-          ball.y = ball.y * 0.7 + ballData.y * 0.3;
+          // Store server position as target for smooth interpolation
+          if (!ball.serverX) {
+            // First update - initialize
+            ball.serverX = ballData.x;
+            ball.serverY = ballData.y;
+            ball.x = ballData.x;
+            ball.y = ballData.y;
+          } else {
+            // Update target position
+            ball.serverX = ballData.x;
+            ball.serverY = ballData.y;
+          }
+
+          // Update velocities for dead reckoning
           ball.vx = ballData.vx;
           ball.vy = ballData.vy;
+
+          // Store timestamp for interpolation
+          ball.lastServerUpdate = Date.now();
         }
       });
     }
@@ -188,12 +202,28 @@ export class MultiplayerManager {
   }
 
   handlePosition(data) {
-    this.otherPlayersRef.current[data.id] = {
-      x: data.x,
-      y: data.y,
-      hasShield: data.hasShield,
-      lastUpdate: Date.now()
-    };
+    const existing = this.otherPlayersRef.current[data.id];
+
+    // If player doesn't exist yet, initialize with direct position
+    if (!existing) {
+      this.otherPlayersRef.current[data.id] = {
+        x: data.x,
+        y: data.y,
+        targetX: data.x,
+        targetY: data.y,
+        hasShield: data.hasShield,
+        lastUpdate: Date.now()
+      };
+    } else {
+      // Update target position for interpolation
+      this.otherPlayersRef.current[data.id] = {
+        ...existing,
+        targetX: data.x,
+        targetY: data.y,
+        hasShield: data.hasShield,
+        lastUpdate: Date.now()
+      };
+    }
   }
 
   handleBlast(data) {

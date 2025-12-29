@@ -263,6 +263,11 @@ const BallDodgeGame = () => {
           return;
         }
 
+        // Smooth interpolation towards target position
+        const lerpFactor = 0.25; // 25% move towards target each frame (~60fps = smooth movement)
+        otherPlayer.x += (otherPlayer.targetX - otherPlayer.x) * lerpFactor;
+        otherPlayer.y += (otherPlayer.targetY - otherPlayer.y) * lerpFactor;
+
         ctx.beginPath();
         ctx.arc(otherPlayer.x, otherPlayer.y, GAME_CONFIG.PLAYER.RADIUS, 0, Math.PI * 2);
         ctx.fillStyle = GAME_CONFIG.COLORS.OTHER_PLAYER;
