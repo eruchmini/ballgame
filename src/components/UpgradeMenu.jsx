@@ -52,13 +52,6 @@ export const UpgradeMenu = ({
         >
           🎯 Bullet Tracking 0.5s {trackingUpgrades > 0 ? '✓ OWNED' : '(Costs 2 Points)'}
         </button>
-
-        <button
-          onClick={onClose}
-          className="w-full p-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-        >
-          Close (Save for later)
-        </button>
       </div>
     </div>
   );

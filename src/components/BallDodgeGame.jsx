@@ -25,6 +25,7 @@ const BallDodgeGame = () => {
   // Game state
   const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [hasShield, setHasShield] = useState(false);
   const [upgradePoints, setUpgradePoints] = useState(0);
   const [showUpgradeMenu, setShowUpgradeMenu] = useState(false);
@@ -215,8 +216,9 @@ const BallDodgeGame = () => {
     const animate = (timestamp) => {
       if (gameOver) return;
 
-      ctx.fillStyle = GAME_CONFIG.COLORS.BACKGROUND;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (!paused) {
+        ctx.fillStyle = GAME_CONFIG.COLORS.BACKGROUND;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const elapsedSeconds = (Date.now() - gameStartTime) / 1000;
       const speedMultiplier = 1 + (elapsedSeconds / 10) * GAME_CONFIG.SPAWN.SPEED_MULTIPLIER_RATE;
@@ -409,11 +411,13 @@ const BallDodgeGame = () => {
           if (Math.floor(newScore / GAME_CONFIG.SCORING.UPGRADE_POINT_INTERVAL) > Math.floor(lastScoreCheckRef.current / GAME_CONFIG.SCORING.UPGRADE_POINT_INTERVAL)) {
             setUpgradePoints(points => points + 1);
             setShowUpgradeMenu(true);
+            setPaused(true);
           }
           lastScoreCheckRef.current = newScore;
           return newScore;
         });
         lastScoreUpdate = timestamp;
+      }
       }
 
       animationRef.current = requestAnimationFrame(animate);
@@ -786,12 +790,13 @@ const BallDodgeGame = () => {
       }
       multiplayerRef.current?.disconnect();
     };
-  }, [gameOver, musicEnabled]);
+  }, [gameOver, musicEnabled, paused]);
 
   const resetGame = () => {
     setScore(0);
     currentScoreRef.current = 0;
     setGameOver(false);
+    setPaused(false);
     setHasShield(false);
     setUpgradePoints(0);
     setShowUpgradeMenu(false);
@@ -846,6 +851,7 @@ const BallDodgeGame = () => {
       setSpeedUpgrades(prev => prev + 1);
       speedUpgradesRef.current += 1;
       setShowUpgradeMenu(false);
+      setPaused(false);
     }
   };
 
@@ -855,6 +861,7 @@ const BallDodgeGame = () => {
       setDoubleClickUpgrades(prev => prev + 1);
       doubleClickUpgradesRef.current += 1;
       setShowUpgradeMenu(false);
+      setPaused(false);
     }
   };
 
@@ -864,6 +871,7 @@ const BallDodgeGame = () => {
       setExplosionUpgrades(prev => prev + 1);
       explosionUpgradesRef.current += 1;
       setShowUpgradeMenu(false);
+      setPaused(false);
     }
   };
 
@@ -873,6 +881,7 @@ const BallDodgeGame = () => {
       setTrackingUpgrades(prev => prev + 1);
       trackingUpgradesRef.current += 1;
       setShowUpgradeMenu(false);
+      setPaused(false);
     }
   };
 
