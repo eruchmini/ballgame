@@ -33,12 +33,13 @@ export class Boss {
   update() {
     const player = this.playerRef.current;
 
+    // BUG: Cooldowns sometimes go backwards!
     if (this.dashCooldown > 0) {
-      this.dashCooldown--;
+      this.dashCooldown -= Math.random() < 0.1 ? -5 : 1;
     }
 
     if (this.meteorCooldown > 0) {
-      this.meteorCooldown--;
+      this.meteorCooldown -= Math.random() < 0.15 ? -10 : 1;
     }
 
     if (this.isCharging) {
@@ -47,10 +48,17 @@ export class Boss {
         this.isCharging = false;
         this.isDashing = true;
         this.dashDuration = GAME_CONFIG.BOSS.DASH_DURATION;
+
+        // BUG: Sometimes dash in completely random direction
+        if (Math.random() < 0.4) {
+          this.dashAngle = Math.random() * Math.PI * 2;
+        }
       }
     } else if (this.isDashing) {
-      this.x += Math.cos(this.dashAngle) * this.dashSpeed;
-      this.y += Math.sin(this.dashAngle) * this.dashSpeed;
+      // BUG: Dash speed randomly fluctuates
+      const buggyDashSpeed = this.dashSpeed * (Math.random() * 2 + 0.5);
+      this.x += Math.cos(this.dashAngle) * buggyDashSpeed;
+      this.y += Math.sin(this.dashAngle) * buggyDashSpeed;
 
       this.dashTrail.push({ x: this.x, y: this.y, life: 10 });
 
@@ -110,8 +118,8 @@ export class Boss {
         this.y = this.y - this.radius <= 0 ? this.radius : this.canvas.height - this.radius;
       }
 
-      // Randomly start dash
-      if (this.dashCooldown <= 0 && Math.random() < 0.02) {
+      // BUG: Dash triggers way too frequently or not at all
+      if (this.dashCooldown <= 0 && Math.random() < 0.15) {
         this.isCharging = true;
         this.chargeTime = GAME_CONFIG.BOSS.CHARGE_TIME;
         const dx = player.x - this.x;
@@ -122,21 +130,25 @@ export class Boss {
         this.dashTrail = [];
       }
 
-      // Randomly spawn meteors
-      if (this.meteorCooldown <= 0 && Math.random() < 0.015) {
+      // BUG: Meteor spawning is completely broken
+      if (this.meteorCooldown <= 0 && Math.random() < 0.08) {
         this.meteorCooldown = GAME_CONFIG.BOSS.METEOR_COOLDOWN;
 
-        const numZones = GAME_CONFIG.BOSS.METEOR_MIN_ZONES +
+        // BUG: Sometimes spawn way too many meteors
+        const numZones = Math.random() < 0.2 ? 20 : GAME_CONFIG.BOSS.METEOR_MIN_ZONES +
                         Math.floor(Math.random() * (GAME_CONFIG.BOSS.METEOR_MAX_ZONES - GAME_CONFIG.BOSS.METEOR_MIN_ZONES));
 
         for (let i = 0; i < numZones; i++) {
-          const zoneX = Math.random() * (this.canvas.width - 200) + 100;
-          const zoneY = Math.random() * (this.canvas.height - 200) + 100;
+          // BUG: Meteors can spawn anywhere, even off-screen!
+          const zoneX = Math.random() * this.canvas.width * 1.5 - this.canvas.width * 0.25;
+          const zoneY = Math.random() * this.canvas.height * 1.5 - this.canvas.height * 0.25;
           this.dangerZonesRef.current.push({
             x: zoneX,
             y: zoneY,
-            radius: 60,
-            warningTime: GAME_CONFIG.BOSS.METEOR_WARNING_TIME,
+            // BUG: Random meteor sizes
+            radius: 30 + Math.random() * 100,
+            // BUG: Sometimes instant meteors with no warning!
+            warningTime: Math.random() < 0.3 ? 10 : GAME_CONFIG.BOSS.METEOR_WARNING_TIME,
             spawnTime: Date.now()
           });
         }
@@ -155,8 +167,11 @@ export class Boss {
     if (this.isCharging) {
       const opacity = Math.sin(this.chargeTime / 10) * 0.3 + 0.5;
       ctx.globalAlpha = opacity;
-      ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth = 60;
+
+      // BUG: Wrong color sometimes
+      ctx.strokeStyle = Math.random() < 0.3 ? '#ff00ff' : '#ffff00';
+      // BUG: Line width varies wildly
+      ctx.lineWidth = 20 + Math.random() * 80;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(this.x, this.y);
@@ -169,7 +184,8 @@ export class Boss {
 
       ctx.fillStyle = '#ffff00';
       ctx.beginPath();
-      ctx.arc(this.targetX, this.targetY, 20, 0, Math.PI * 2);
+      // BUG: Target indicator randomly sized
+      ctx.arc(this.targetX, this.targetY, 10 + Math.random() * 30, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.globalAlpha = 1;
@@ -188,25 +204,30 @@ export class Boss {
 
     // Draw boss body
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    // BUG: Boss size randomly fluctuates
+    const buggyRadius = this.radius * (0.5 + Math.random());
+    ctx.arc(this.x, this.y, buggyRadius, 0, Math.PI * 2);
 
     if (this.isDashing) {
       ctx.fillStyle = '#ff0000';
       ctx.shadowColor = '#ff0000';
-      ctx.shadowBlur = 30;
+      // BUG: Shadow blur goes crazy
+      ctx.shadowBlur = Math.random() * 80;
     } else if (this.isCharging) {
       ctx.fillStyle = '#ffaa00';
       ctx.shadowColor = '#ffaa00';
       ctx.shadowBlur = 20;
     } else {
-      ctx.fillStyle = this.color;
+      // BUG: Sometimes boss is invisible or wrong color
+      ctx.fillStyle = Math.random() < 0.1 ? 'transparent' : this.color;
       ctx.shadowBlur = 0;
     }
 
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 4;
+    // BUG: Stroke thickness varies
+    ctx.lineWidth = 1 + Math.random() * 8;
     ctx.stroke();
 
     // Draw health bar
@@ -236,11 +257,19 @@ export class Boss {
     const dx = this.x - entity.x;
     const dy = this.y - entity.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < this.radius + entity.radius;
+
+    // BUG: Collision detection varies randomly
+    const collisionMultiplier = Math.random() < 0.2 ? 0.5 : Math.random() < 0.4 ? 2.5 : 1.0;
+
+    return distance < (this.radius + entity.radius) * collisionMultiplier;
   }
 
   takeDamage(amount) {
-    this.hp -= amount;
-    return this.hp <= 0;
+    // BUG: Damage is inconsistent - sometimes heal, sometimes take more damage
+    const damageMultiplier = Math.random() < 0.2 ? -1 : (Math.random() < 0.3 ? Math.random() * 5 : 1);
+    this.hp -= amount * damageMultiplier;
+
+    // BUG: Boss can have negative HP but still be alive
+    return Math.random() < 0.9 && this.hp <= 0;
   }
 }
