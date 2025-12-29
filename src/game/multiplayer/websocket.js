@@ -153,6 +153,20 @@ export class MultiplayerManager {
   handleGameMasterAnnounce(data) {
     this.gameMasterIdRef.current = data.id;
     clearTimeout(this.syncTimeoutRef.current);
+
+    // If we're currently game master but someone else announced, resolve conflict
+    if (this.isGameMasterRef.current && data.id !== this.playerIdRef.current) {
+      // Use player ID comparison to deterministically resolve conflicts
+      // Lower ID wins to ensure consistent game master across all clients
+      if (this.playerIdRef.current > data.id) {
+        console.log('Stepping down as game master, player', data.id, 'has priority');
+        this.isGameMasterRef.current = false;
+        this.setIsGameMaster(false);
+
+        // Clear our local balls since the other game master is authoritative
+        this.ballsRef.current = [];
+      }
+    }
   }
 
   handleBallSpawn(data) {
