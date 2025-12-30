@@ -69,6 +69,7 @@ const BallDodgeGame = () => {
   const currentScoreRef = useRef(0);
   const dangerZonesRef = useRef([]);
   const bossDefeatedRef = useRef(false);
+  const bossesSpawnedCountRef = useRef(0);
   const screenShakeRef = useRef({ x: 0, y: 0, intensity: 0 });
   const comboRef = useRef({ count: 0, lastHitTime: 0 });
   const powerupsRef = useRef([]);
@@ -479,9 +480,15 @@ const BallDodgeGame = () => {
         lastSpawn = timestamp;
       }
 
-      // Boss logic
-      if (score >= GAME_CONFIG.SCORING.BOSS_SPAWN_THRESHOLD && !bossSpawnedRef.current && !bossRef.current) {
+      // Boss logic - spawn first boss at 500, second boss at 1500
+      const shouldSpawnBoss = (
+        (score >= 500 && bossesSpawnedCountRef.current === 0) ||
+        (score >= 1500 && bossesSpawnedCountRef.current === 1)
+      ) && !bossSpawnedRef.current && !bossRef.current;
+
+      if (shouldSpawnBoss) {
         bossSpawnedRef.current = true;
+        bossesSpawnedCountRef.current++;
         setBossActive(true);
         bossRef.current = new Boss(
           canvas,
@@ -765,8 +772,15 @@ const BallDodgeGame = () => {
             setScore(prev => {
               const newScore = prev + points;
               currentScoreRef.current = newScore;
-              if (newScore >= GAME_CONFIG.SCORING.BOSS_SPAWN_THRESHOLD && !bossSpawnedRef.current && !bossDefeatedRef.current) {
+              // Check if we should spawn a boss (first at 500, second at 1500)
+              const shouldSpawnBoss = (
+                (newScore >= 500 && bossesSpawnedCountRef.current === 0) ||
+                (newScore >= 1500 && bossesSpawnedCountRef.current === 1)
+              ) && !bossSpawnedRef.current && !bossRef.current;
+
+              if (shouldSpawnBoss) {
                 bossSpawnedRef.current = true;
+                bossesSpawnedCountRef.current++;
                 setBossActive(true);
                 bossRef.current = new Boss(
                   canvas,
@@ -828,8 +842,8 @@ const BallDodgeGame = () => {
               });
               setBossActive(false);
               bossRef.current = null;
+              // Reset flag to allow next boss to spawn (if conditions are met)
               bossSpawnedRef.current = false;
-              bossDefeatedRef.current = true;
 
               audioSystem.stopBossMusic();
               if (musicEnabled && !audioSystem.backgroundMusicRef.current) {
@@ -1060,6 +1074,7 @@ const BallDodgeGame = () => {
     bossRef.current = null;
     bossSpawnedRef.current = false;
     bossDefeatedRef.current = false;
+    bossesSpawnedCountRef.current = 0;
     dangerZonesRef.current = [];
     otherBlastsRef.current = [];
     playerRef.current = {
