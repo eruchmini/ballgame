@@ -119,12 +119,17 @@ const BallDodgeGame = () => {
     multiplayerRef.current.connect();
 
     // Keyboard event handlers
+    const clearAllKeys = () => {
+      keysRef.current = {};
+    };
+
     const handleKeyDown = (e) => {
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
         e.preventDefault();
         keysRef.current[e.key] = true;
       }
       if (e.key === 'Escape' && !gameOver && !showUpgradeMenu) {
+        clearAllKeys(); // Clear keys when pausing
         setPaused(prev => !prev);
       }
     };
@@ -133,8 +138,22 @@ const BallDodgeGame = () => {
       keysRef.current[e.key] = false;
     };
 
+    // Clear keys when window loses focus to prevent stuck keys
+    const handleBlur = () => {
+      clearAllKeys();
+    };
+
+    // Clear keys when tab becomes hidden
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearAllKeys();
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Mouse event handlers
     const handleMouseMove = (e) => {
@@ -674,6 +693,7 @@ const BallDodgeGame = () => {
         setScore(prev => {
           const newScore = prev + GAME_CONFIG.SCORING.POINTS_PER_SECOND;
           if (Math.floor(newScore / GAME_CONFIG.SCORING.UPGRADE_POINT_INTERVAL) > Math.floor(lastScoreCheckRef.current / GAME_CONFIG.SCORING.UPGRADE_POINT_INTERVAL)) {
+            clearAllKeys(); // Clear keys when opening upgrade menu
             setUpgradePoints(points => points + 1);
             setShowUpgradeMenu(true);
             setPaused(true);
@@ -1081,6 +1101,7 @@ const BallDodgeGame = () => {
 
               return false;
             } else {
+              clearAllKeys(); // Clear keys on game over
               setGameOver(true);
               audioSystem.playGameOverSound();
               audioSystem.playGameOverMelody();
@@ -1114,6 +1135,7 @@ const BallDodgeGame = () => {
       }
 
       if (instant) {
+        clearAllKeys(); // Clear keys on instant death
         setGameOver(true);
         audioSystem.playGameOverSound();
         audioSystem.playGameOverMelody();
@@ -1130,6 +1152,7 @@ const BallDodgeGame = () => {
           shieldTimerRef.current = null;
         }
       } else {
+        clearAllKeys(); // Clear keys on game over
         setGameOver(true);
         audioSystem.playGameOverSound();
         audioSystem.playGameOverMelody();
@@ -1144,6 +1167,8 @@ const BallDodgeGame = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('click', handleClick);
       audioSystem.stopBackgroundMusic();
