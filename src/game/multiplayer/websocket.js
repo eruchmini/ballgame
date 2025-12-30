@@ -143,17 +143,10 @@ export class MultiplayerManager {
       this.setIsGameMaster(false);
       this.gameMasterIdRef.current = data.gameMasterId;
 
-      // BUG: Sometimes duplicate all the balls!
-      if (Math.random() < 0.3) {
-        this.ballsRef.current = [...this.ballsRef.current, ...data.balls.map(ballData =>
-          FallingBall.fromNetworkData(ballData, this.canvas)
-        )];
-      } else {
-        // Sync balls
-        this.ballsRef.current = data.balls.map(ballData =>
-          FallingBall.fromNetworkData(ballData, this.canvas)
-        );
-      }
+      // Sync balls
+      this.ballsRef.current = data.balls.map(ballData =>
+        FallingBall.fromNetworkData(ballData, this.canvas)
+      );
     }
   }
 
@@ -177,15 +170,10 @@ export class MultiplayerManager {
   }
 
   handleBallSpawn(data) {
-    // BUG: Sometimes game master also processes spawn, creating duplicates!
-    if (!this.isGameMasterRef.current || Math.random() < 0.2) {
+    // Only clients should process this
+    if (!this.isGameMasterRef.current) {
       const ball = FallingBall.fromNetworkData(data.ball, this.canvas);
       this.ballsRef.current.push(ball);
-
-      // BUG: Sometimes spawn the ball multiple times
-      if (Math.random() < 0.15) {
-        this.ballsRef.current.push(FallingBall.fromNetworkData(data.ball, this.canvas));
-      }
     }
   }
 
@@ -203,20 +191,14 @@ export class MultiplayerManager {
             ball.x = ballData.x;
             ball.y = ballData.y;
           } else {
-            // BUG: Sometimes use wrong coordinates
-            if (Math.random() < 0.2) {
-              ball.serverX = ballData.y; // Swapped!
-              ball.serverY = ballData.x;
-            } else {
-              // Update target position
-              ball.serverX = ballData.x;
-              ball.serverY = ballData.y;
-            }
+            // Update target position
+            ball.serverX = ballData.x;
+            ball.serverY = ballData.y;
           }
 
-          // BUG: Velocities sometimes get multiplied randomly
-          ball.vx = ballData.vx * (Math.random() < 0.1 ? Math.random() * 3 : 1);
-          ball.vy = ballData.vy * (Math.random() < 0.1 ? Math.random() * 3 : 1);
+          // Update velocities for dead reckoning
+          ball.vx = ballData.vx;
+          ball.vy = ballData.vy;
 
           // Store timestamp for interpolation
           ball.lastServerUpdate = Date.now();
@@ -236,28 +218,23 @@ export class MultiplayerManager {
   handlePosition(data) {
     const existing = this.otherPlayersRef.current[data.id];
 
-    // BUG: Sometimes positions are offset or scaled incorrectly
-    const buggyX = Math.random() < 0.1 ? data.x * Math.random() * 2 : data.x;
-    const buggyY = Math.random() < 0.1 ? data.y * Math.random() * 2 : data.y;
-
     // If player doesn't exist yet, initialize with direct position
     if (!existing) {
       this.otherPlayersRef.current[data.id] = {
-        x: buggyX,
-        y: buggyY,
-        targetX: buggyX,
-        targetY: buggyY,
-        // BUG: Shield state sometimes inverted
-        hasShield: Math.random() < 0.1 ? !data.hasShield : data.hasShield,
+        x: data.x,
+        y: data.y,
+        targetX: data.x,
+        targetY: data.y,
+        hasShield: data.hasShield,
         lastUpdate: Date.now()
       };
     } else {
       // Update target position for interpolation
       this.otherPlayersRef.current[data.id] = {
         ...existing,
-        targetX: buggyX,
-        targetY: buggyY,
-        hasShield: Math.random() < 0.1 ? !data.hasShield : data.hasShield,
+        targetX: data.x,
+        targetY: data.y,
+        hasShield: data.hasShield,
         lastUpdate: Date.now()
       };
     }
@@ -301,29 +278,22 @@ export class MultiplayerManager {
   }
 
   broadcastPosition(x, y, hasShield) {
-    // BUG: Sometimes send wrong position data
-    const buggyX = Math.random() < 0.05 ? x + (Math.random() - 0.5) * 100 : x;
-    const buggyY = Math.random() < 0.05 ? y + (Math.random() - 0.5) * 100 : y;
-
     this.send({
       type: 'position',
       id: this.playerIdRef.current,
-      x: buggyX,
-      y: buggyY,
+      x,
+      y,
       hasShield
     });
   }
 
   broadcastBlast(x, y, angle) {
-    // BUG: Sometimes send blast with random angle
-    const buggyAngle = Math.random() < 0.2 ? Math.random() * Math.PI * 2 : angle;
-
     this.send({
       type: 'blast',
       id: this.playerIdRef.current,
       x,
       y,
-      angle: buggyAngle
+      angle
     });
   }
 
