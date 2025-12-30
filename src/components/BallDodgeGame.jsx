@@ -37,6 +37,8 @@ const BallDodgeGame = () => {
   const [bossHP, setBossHP] = useState(GAME_CONFIG.BOSS.HP);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [isGameMaster, setIsGameMaster] = useState(false);
+  const [combo, setCombo] = useState(0);
+  const [activePowerups, setActivePowerups] = useState([]);
 
   // Game refs
   const playerRef = useRef({
@@ -67,6 +69,10 @@ const BallDodgeGame = () => {
   const currentScoreRef = useRef(0);
   const dangerZonesRef = useRef([]);
   const bossDefeatedRef = useRef(false);
+  const screenShakeRef = useRef({ x: 0, y: 0, intensity: 0 });
+  const comboRef = useRef({ count: 0, lastHitTime: 0 });
+  const powerupsRef = useRef([]);
+  const activePowerupsRef = useRef([]);
 
   // Multiplayer refs
   const playerIdRef = useRef(Math.random().toString(36).substr(2, 9));
@@ -112,6 +118,9 @@ const BallDodgeGame = () => {
         e.preventDefault();
         keysRef.current[e.key] = true;
       }
+      if (e.key === 'Escape' && !gameOver && !showUpgradeMenu) {
+        setPaused(prev => !prev);
+      }
     };
 
     const handleKeyUp = (e) => {
@@ -150,7 +159,11 @@ const BallDodgeGame = () => {
       const currentTime = Date.now();
       const timeSinceLastMultiShot = currentTime - lastMultiShotTimeRef.current;
 
-      const numShots = (doubleClickUpgradesRef.current > 0 && timeSinceLastMultiShot >= GAME_CONFIG.UPGRADE.MULTI_SHOT_COOLDOWN)
+      // Rapid fire powerup reduces cooldown
+      const rapidFireActive = hasActivePowerup(GAME_CONFIG.POWERUP.TYPES.RAPID_FIRE);
+      const multiShotCooldown = rapidFireActive ? GAME_CONFIG.UPGRADE.MULTI_SHOT_COOLDOWN / 3 : GAME_CONFIG.UPGRADE.MULTI_SHOT_COOLDOWN;
+
+      const numShots = (doubleClickUpgradesRef.current > 0 && timeSinceLastMultiShot >= multiShotCooldown)
         ? 1 + doubleClickUpgradesRef.current
         : 1;
 
@@ -193,6 +206,81 @@ const BallDodgeGame = () => {
 
     canvas.addEventListener('click', handleClick);
 
+    // Helper functions
+    const addScreenShake = (intensity) => {
+      screenShakeRef.current.intensity = Math.max(screenShakeRef.current.intensity, intensity);
+    };
+
+    const updateScreenShake = () => {
+      if (screenShakeRef.current.intensity > 0.1) {
+        screenShakeRef.current.x = (Math.random() - 0.5) * screenShakeRef.current.intensity;
+        screenShakeRef.current.y = (Math.random() - 0.5) * screenShakeRef.current.intensity;
+        screenShakeRef.current.intensity *= GAME_CONFIG.SCREEN_SHAKE.DECAY_RATE;
+      } else {
+        screenShakeRef.current.x = 0;
+        screenShakeRef.current.y = 0;
+        screenShakeRef.current.intensity = 0;
+      }
+    };
+
+    const spawnPowerup = (x, y) => {
+      if (Math.random() < GAME_CONFIG.POWERUP.DROP_CHANCE) {
+        const types = Object.values(GAME_CONFIG.POWERUP.TYPES);
+        const type = types[Math.floor(Math.random() * types.length)];
+        powerupsRef.current.push({
+          x,
+          y,
+          type,
+          radius: GAME_CONFIG.POWERUP.RADIUS,
+          speed: GAME_CONFIG.POWERUP.FALL_SPEED,
+        });
+      }
+    };
+
+    const activatePowerup = (type) => {
+      const powerup = {
+        type,
+        endTime: Date.now() + GAME_CONFIG.POWERUP.DURATION,
+      };
+      activePowerupsRef.current.push(powerup);
+      setActivePowerups([...activePowerupsRef.current]);
+
+      setTimeout(() => {
+        activePowerupsRef.current = activePowerupsRef.current.filter(p => p !== powerup);
+        setActivePowerups([...activePowerupsRef.current]);
+      }, GAME_CONFIG.POWERUP.DURATION);
+    };
+
+    const updateCombo = () => {
+      const now = Date.now();
+      if (now - comboRef.current.lastHitTime > GAME_CONFIG.COMBO.TIMEOUT) {
+        comboRef.current.count = 0;
+        setCombo(0);
+      }
+    };
+
+    const addCombo = () => {
+      const now = Date.now();
+      if (now - comboRef.current.lastHitTime < GAME_CONFIG.COMBO.TIMEOUT) {
+        comboRef.current.count++;
+      } else {
+        comboRef.current.count = 1;
+      }
+      comboRef.current.lastHitTime = now;
+      setCombo(comboRef.current.count);
+    };
+
+    const getComboMultiplier = () => {
+      return Math.min(
+        1 + (comboRef.current.count * GAME_CONFIG.COMBO.MULTIPLIER_PER_LEVEL),
+        GAME_CONFIG.COMBO.MAX_MULTIPLIER
+      );
+    };
+
+    const hasActivePowerup = (type) => {
+      return activePowerupsRef.current.some(p => p.type === type);
+    };
+
     // Spawn ball function
     const spawnBall = (speedMultiplier) => {
       if (!gameOver && !bossSpawnedRef.current && isGameMasterRef.current) {
@@ -217,11 +305,22 @@ const BallDodgeGame = () => {
       if (gameOver) return;
 
       if (!paused) {
+        // Update screen shake
+        updateScreenShake();
+
+        // Update combo timeout
+        updateCombo();
+
+        // Apply screen shake
+        ctx.save();
+        ctx.translate(screenShakeRef.current.x, screenShakeRef.current.y);
+
         ctx.fillStyle = GAME_CONFIG.COLORS.BACKGROUND;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(-screenShakeRef.current.x, -screenShakeRef.current.y, canvas.width, canvas.height);
 
       const elapsedSeconds = (Date.now() - gameStartTime) / 1000;
-      const speedMultiplier = 1 + (elapsedSeconds / 10) * GAME_CONFIG.SPAWN.SPEED_MULTIPLIER_RATE;
+      const timeMultiplier = hasActivePowerup(GAME_CONFIG.POWERUP.TYPES.SLOW_TIME) ? 0.5 : 1;
+      const speedMultiplier = (1 + (elapsedSeconds / 10) * GAME_CONFIG.SPAWN.SPEED_MULTIPLIER_RATE) * timeMultiplier;
 
       spawnInterval = Math.max(
         GAME_CONFIG.SPAWN.MIN_INTERVAL,
@@ -309,6 +408,22 @@ const BallDodgeGame = () => {
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 3;
       ctx.stroke();
+
+      // Invincibility glow effect
+      if (hasActivePowerup(GAME_CONFIG.POWERUP.TYPES.INVINCIBILITY)) {
+        const glowSize = player.radius + 10 + Math.sin(Date.now() / 100) * 5;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, glowSize, 0, Math.PI * 2);
+        ctx.strokeStyle = GAME_CONFIG.COLORS.POWERUP_INVINCIBILITY;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, glowSize + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+        ctx.lineWidth = 8;
+        ctx.stroke();
+      }
 
       const cursorDx = currentCursorRef.current.x - player.x;
       const cursorDy = currentCursorRef.current.y - player.y;
@@ -408,6 +523,89 @@ const BallDodgeGame = () => {
 
       // Update and draw balls
       updateAndDrawBalls(ctx, audioSystem);
+
+      // Update and draw powerups
+      powerupsRef.current = powerupsRef.current.filter(powerup => {
+        powerup.y += powerup.speed;
+
+        const dx = powerup.x - player.x;
+        const dy = powerup.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < powerup.radius + player.radius) {
+          activatePowerup(powerup.type);
+          audioSystem.playShieldSound();
+          return false;
+        }
+
+        if (powerup.y > canvas.height + powerup.radius) {
+          return false;
+        }
+
+        // Draw powerup with pulsing effect
+        const pulseScale = 1 + Math.sin(Date.now() / 200) * 0.2;
+        ctx.beginPath();
+        ctx.arc(powerup.x, powerup.y, powerup.radius * pulseScale, 0, Math.PI * 2);
+
+        const colors = {
+          [GAME_CONFIG.POWERUP.TYPES.RAPID_FIRE]: GAME_CONFIG.COLORS.POWERUP_RAPID_FIRE,
+          [GAME_CONFIG.POWERUP.TYPES.INVINCIBILITY]: GAME_CONFIG.COLORS.POWERUP_INVINCIBILITY,
+          [GAME_CONFIG.POWERUP.TYPES.SLOW_TIME]: GAME_CONFIG.COLORS.POWERUP_SLOW_TIME,
+          [GAME_CONFIG.POWERUP.TYPES.MEGA_BLAST]: GAME_CONFIG.COLORS.POWERUP_MEGA_BLAST,
+        };
+
+        ctx.fillStyle = colors[powerup.type];
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw icon/letter
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const icons = {
+          [GAME_CONFIG.POWERUP.TYPES.RAPID_FIRE]: 'R',
+          [GAME_CONFIG.POWERUP.TYPES.INVINCIBILITY]: 'I',
+          [GAME_CONFIG.POWERUP.TYPES.SLOW_TIME]: 'S',
+          [GAME_CONFIG.POWERUP.TYPES.MEGA_BLAST]: 'M',
+        };
+        ctx.fillText(icons[powerup.type], powerup.x, powerup.y);
+
+        return true;
+      });
+
+      // Draw combo indicator
+      if (comboRef.current.count > 1) {
+        const multiplier = getComboMultiplier();
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`COMBO x${comboRef.current.count}`, canvas.width / 2, 50);
+        ctx.font = '16px Arial';
+        ctx.fillText(`${multiplier.toFixed(1)}x points`, canvas.width / 2, 75);
+      }
+
+      // Draw active powerup indicators
+      if (activePowerupsRef.current.length > 0) {
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 14px Arial';
+        activePowerupsRef.current.forEach((powerup, i) => {
+          const timeLeft = Math.max(0, (powerup.endTime - Date.now()) / 1000);
+          const labels = {
+            [GAME_CONFIG.POWERUP.TYPES.RAPID_FIRE]: '🔫 Rapid Fire',
+            [GAME_CONFIG.POWERUP.TYPES.INVINCIBILITY]: '⭐ Invincible',
+            [GAME_CONFIG.POWERUP.TYPES.SLOW_TIME]: '⏱️ Slow Time',
+            [GAME_CONFIG.POWERUP.TYPES.MEGA_BLAST]: '💥 Mega Blast',
+          };
+          ctx.fillStyle = '#ffff00';
+          ctx.fillText(`${labels[powerup.type]}: ${timeLeft.toFixed(1)}s`, 20, 120 + i * 25);
+        });
+      }
+
+      // Restore canvas transformation (undo screen shake)
+      ctx.restore();
 
       // Score increment
       if (timestamp - lastScoreUpdate > 1000) {
@@ -511,11 +709,12 @@ const BallDodgeGame = () => {
 
           const baseRadius = GAME_CONFIG.EXPLOSION.BASE_RADIUS;
           const bonusRadius = explosionUpgradesRef.current * GAME_CONFIG.EXPLOSION.BONUS_RADIUS_PER_UPGRADE;
+          const megaBlastBonus = hasActivePowerup(GAME_CONFIG.POWERUP.TYPES.MEGA_BLAST) ? 50 : 0;
           explosionsRef.current.push({
             x: blast.x,
             y: blast.y,
             radius: 5,
-            maxRadius: baseRadius + bonusRadius,
+            maxRadius: baseRadius + bonusRadius + megaBlastBonus,
             growSpeed: GAME_CONFIG.EXPLOSION.GROW_SPEED,
             active: true
           });
@@ -544,13 +743,25 @@ const BallDodgeGame = () => {
 
           if (dist < blast.radius + ball.radius) {
             const ballId = ball.id;
+            const ballX = ball.x;
+            const ballY = ball.y;
             ballsRef.current.splice(i, 1);
 
             if (isGameMasterRef.current) {
               multiplayerRef.current?.broadcastBallDestroy(ballId);
             }
 
-            const points = ball.isBouncing ? GAME_CONFIG.SCORING.POINTS_PER_BOUNCING_BALL : (ball.isTracking ? GAME_CONFIG.SCORING.POINTS_PER_TRACKING_BALL : GAME_CONFIG.SCORING.POINTS_PER_BALL);
+            // Spawn powerup
+            spawnPowerup(ballX, ballY);
+
+            // Add combo
+            addCombo();
+
+            // Screen shake
+            addScreenShake(GAME_CONFIG.SCREEN_SHAKE.IMPACT_INTENSITY);
+
+            const basePoints = ball.isBouncing ? GAME_CONFIG.SCORING.POINTS_PER_BOUNCING_BALL : (ball.isTracking ? GAME_CONFIG.SCORING.POINTS_PER_TRACKING_BALL : GAME_CONFIG.SCORING.POINTS_PER_BALL);
+            const points = Math.floor(basePoints * getComboMultiplier());
             setScore(prev => {
               const newScore = prev + points;
               currentScoreRef.current = newScore;
@@ -578,11 +789,12 @@ const BallDodgeGame = () => {
 
             const baseRadius = GAME_CONFIG.EXPLOSION.BASE_RADIUS;
             const bonusRadius = explosionUpgradesRef.current * GAME_CONFIG.EXPLOSION.BONUS_RADIUS_PER_UPGRADE;
+            const megaBlastBonus = hasActivePowerup(GAME_CONFIG.POWERUP.TYPES.MEGA_BLAST) ? 50 : 0;
             explosionsRef.current.push({
               x: blast.x,
               y: blast.y,
               radius: 5,
-              maxRadius: baseRadius + bonusRadius,
+              maxRadius: baseRadius + bonusRadius + megaBlastBonus,
               growSpeed: GAME_CONFIG.EXPLOSION.GROW_SPEED,
               active: true
             });
@@ -600,6 +812,9 @@ const BallDodgeGame = () => {
           if (dist < blast.radius + bossRef.current.radius) {
             const defeated = bossRef.current.takeDamage(1);
             setBossHP(bossRef.current.hp);
+
+            // Screen shake on boss hit
+            addScreenShake(GAME_CONFIG.SCREEN_SHAKE.BOSS_HIT_INTENSITY);
 
             impactParticlesRef.current.push(...createImpactParticles(blast.x, blast.y, 8, GAME_CONFIG.COLORS.BOSS));
 
@@ -712,10 +927,21 @@ const BallDodgeGame = () => {
 
             return false;
           } else {
-            if (shieldRef.current) {
+            // Check invincibility first
+            if (hasActivePowerup(GAME_CONFIG.POWERUP.TYPES.INVINCIBILITY)) {
+              audioSystem.playHitSound();
+              addScreenShake(GAME_CONFIG.SCREEN_SHAKE.IMPACT_INTENSITY);
+
+              if (isGameMasterRef.current) {
+                multiplayerRef.current?.broadcastBallDestroy(ball.id);
+              }
+
+              return false;
+            } else if (shieldRef.current) {
               shieldRef.current = false;
               setHasShield(false);
               audioSystem.playHitSound();
+              addScreenShake(GAME_CONFIG.SCREEN_SHAKE.IMPACT_INTENSITY);
 
               if (shieldTimerRef.current) {
                 clearTimeout(shieldTimerRef.current);
@@ -753,6 +979,13 @@ const BallDodgeGame = () => {
     };
 
     const handlePlayerHit = (instant, audioSystem) => {
+      // Invincibility powerup protects from all damage
+      if (hasActivePowerup(GAME_CONFIG.POWERUP.TYPES.INVINCIBILITY)) {
+        audioSystem.playHitSound();
+        addScreenShake(GAME_CONFIG.SCREEN_SHAKE.IMPACT_INTENSITY);
+        return;
+      }
+
       if (instant) {
         setGameOver(true);
         audioSystem.playGameOverSound();
@@ -764,6 +997,7 @@ const BallDodgeGame = () => {
         shieldRef.current = false;
         setHasShield(false);
         audioSystem.playHitSound();
+        addScreenShake(GAME_CONFIG.SCREEN_SHAKE.IMPACT_INTENSITY);
         if (shieldTimerRef.current) {
           clearTimeout(shieldTimerRef.current);
           shieldTimerRef.current = null;
@@ -837,6 +1071,12 @@ const BallDodgeGame = () => {
     keysRef.current = {};
     lastScoreCheckRef.current = 0;
     ballIdCounterRef.current = 0;
+    comboRef.current = { count: 0, lastHitTime: 0 };
+    setCombo(0);
+    powerupsRef.current = [];
+    activePowerupsRef.current = [];
+    setActivePowerups([]);
+    screenShakeRef.current = { x: 0, y: 0, intensity: 0 };
 
     if (shieldTimerRef.current) {
       clearTimeout(shieldTimerRef.current);
@@ -928,6 +1168,15 @@ const BallDodgeGame = () => {
           buyTrackingUpgrade={buyTrackingUpgrade}
           onClose={() => setShowUpgradeMenu(false)}
         />
+      )}
+
+      {paused && !showUpgradeMenu && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-50">
+          <div className="text-center">
+            <div className="text-6xl font-bold text-white mb-4">PAUSED</div>
+            <div className="text-xl text-gray-300">Press ESC to resume</div>
+          </div>
+        </div>
       )}
 
       {gameOver && <GameOver score={score} />}

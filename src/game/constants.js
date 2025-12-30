@@ -11,9 +11,9 @@ export const GAME_CONFIG = {
     RADIUS: 15,
     MIN_SPEED: 2,
     MAX_SPEED: 4,
-    SHIELD_SPAWN_CHANCE: 0.15,
-    TRACKING_SPAWN_CHANCE: 0.10, // 0.25 - 0.15
-    BOUNCING_SPAWN_CHANCE: 0.03, // 0.28 - 0.25
+    SHIELD_SPAWN_CHANCE: 0.12, // Reduced shield spawn for more challenge
+    TRACKING_SPAWN_CHANCE: 0.12, // 0.24 - 0.12 (more tracking balls)
+    BOUNCING_SPAWN_CHANCE: 0.04, // 0.28 - 0.24 (slightly more bouncing)
     MAX_BOUNCES: 2,
   },
 
@@ -64,10 +64,10 @@ export const GAME_CONFIG = {
   },
 
   SPAWN: {
-    INITIAL_INTERVAL: 1200,
-    MIN_INTERVAL: 300,
-    SPEED_INCREASE_RATE: 20, // ms per second
-    SPEED_MULTIPLIER_RATE: 0.01, // 1% per second / 10
+    INITIAL_INTERVAL: 1000,
+    MIN_INTERVAL: 250,
+    SPEED_INCREASE_RATE: 15, // ms per second (faster difficulty increase)
+    SPEED_MULTIPLIER_RATE: 0.015, // 1.5% per second / 10 (slightly faster)
   },
 
   MULTIPLAYER: {
@@ -76,6 +76,32 @@ export const GAME_CONFIG = {
     BALL_UPDATE_INTERVAL: 100,
     PLAYER_TIMEOUT: 3000,
     SYNC_TIMEOUT: 1000,
+  },
+
+  SCREEN_SHAKE: {
+    IMPACT_INTENSITY: 5,
+    EXPLOSION_INTENSITY: 8,
+    BOSS_HIT_INTENSITY: 12,
+    DECAY_RATE: 0.9,
+  },
+
+  COMBO: {
+    TIMEOUT: 2000, // 2 seconds to maintain combo
+    MULTIPLIER_PER_LEVEL: 0.5, // +50% per combo level
+    MAX_MULTIPLIER: 5,
+  },
+
+  POWERUP: {
+    DROP_CHANCE: 0.15, // 15% chance from destroyed balls
+    DURATION: 8000, // 8 seconds
+    RADIUS: 12,
+    FALL_SPEED: 2,
+    TYPES: {
+      RAPID_FIRE: 'rapid_fire',
+      INVINCIBILITY: 'invincibility',
+      SLOW_TIME: 'slow_time',
+      MEGA_BLAST: 'mega_blast',
+    },
   },
 
   COLORS: {
@@ -91,5 +117,9 @@ export const GAME_CONFIG = {
     BLAST: '#ffff00',
     OTHER_BLAST: '#00ffff',
     SHIELD: '#00ffff',
+    POWERUP_RAPID_FIRE: '#ff9900',
+    POWERUP_INVINCIBILITY: '#ffff00',
+    POWERUP_SLOW_TIME: '#00ffff',
+    POWERUP_MEGA_BLAST: '#ff00ff',
   },
 };
