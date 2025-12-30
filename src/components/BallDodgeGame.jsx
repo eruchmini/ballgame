@@ -927,10 +927,21 @@ const BallDodgeGame = () => {
 
             return false;
           } else {
-            if (shieldRef.current) {
+            // Check invincibility first
+            if (hasActivePowerup(GAME_CONFIG.POWERUP.TYPES.INVINCIBILITY)) {
+              audioSystem.playHitSound();
+              addScreenShake(GAME_CONFIG.SCREEN_SHAKE.IMPACT_INTENSITY);
+
+              if (isGameMasterRef.current) {
+                multiplayerRef.current?.broadcastBallDestroy(ball.id);
+              }
+
+              return false;
+            } else if (shieldRef.current) {
               shieldRef.current = false;
               setHasShield(false);
               audioSystem.playHitSound();
+              addScreenShake(GAME_CONFIG.SCREEN_SHAKE.IMPACT_INTENSITY);
 
               if (shieldTimerRef.current) {
                 clearTimeout(shieldTimerRef.current);
