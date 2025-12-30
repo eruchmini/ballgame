@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GAME_CONFIG } from '../game/constants';
 import { FallingBall } from '../game/classes/FallingBall';
 import { Boss } from '../game/classes/Boss';
+import { Boss2 } from '../game/classes/Boss2';
 import { AudioSystem } from '../game/audio/sounds';
 import { MultiplayerManager } from '../game/multiplayer/websocket';
 import {
@@ -35,6 +36,8 @@ const BallDodgeGame = () => {
   const [trackingUpgrades, setTrackingUpgrades] = useState(0);
   const [bossActive, setBossActive] = useState(false);
   const [bossHP, setBossHP] = useState(GAME_CONFIG.BOSS.HP);
+  const [boss2Active, setBoss2Active] = useState(false);
+  const [boss2HP, setBoss2HP] = useState(GAME_CONFIG.BOSS2.HP);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [isGameMaster, setIsGameMaster] = useState(false);
   const [combo, setCombo] = useState(0);
@@ -66,9 +69,12 @@ const BallDodgeGame = () => {
   const impactParticlesRef = useRef([]);
   const bossRef = useRef(null);
   const bossSpawnedRef = useRef(false);
+  const boss2Ref = useRef(null);
+  const boss2SpawnedRef = useRef(false);
   const currentScoreRef = useRef(0);
   const dangerZonesRef = useRef([]);
   const bossDefeatedRef = useRef(false);
+  const boss2DefeatedRef = useRef(false);
   const screenShakeRef = useRef({ x: 0, y: 0, intensity: 0 });
   const comboRef = useRef({ count: 0, lastHitTime: 0 });
   const powerupsRef = useRef([]);
@@ -283,7 +289,7 @@ const BallDodgeGame = () => {
 
     // Spawn ball function
     const spawnBall = (speedMultiplier) => {
-      if (!gameOver && !bossSpawnedRef.current && isGameMasterRef.current) {
+      if (!gameOver && !bossSpawnedRef.current && !boss2SpawnedRef.current && isGameMasterRef.current) {
         const rand = Math.random();
         const isShield = rand < GAME_CONFIG.BALL.SHIELD_SPAWN_CHANCE;
         const isTracking = !isShield && rand < (GAME_CONFIG.BALL.SHIELD_SPAWN_CHANCE + GAME_CONFIG.BALL.TRACKING_SPAWN_CHANCE);
@@ -473,14 +479,14 @@ const BallDodgeGame = () => {
         (ballId) => multiplayerRef.current?.broadcastBallDestroy(ballId)
       );
 
-      // Spawn balls
-      if (timestamp - lastSpawn > spawnInterval) {
+      // Spawn balls (only if no boss is active)
+      if (timestamp - lastSpawn > spawnInterval && !bossRef.current && !boss2Ref.current) {
         spawnBall(speedMultiplier);
         lastSpawn = timestamp;
       }
 
-      // Boss logic
-      if (score >= GAME_CONFIG.SCORING.BOSS_SPAWN_THRESHOLD && !bossSpawnedRef.current && !bossRef.current) {
+      // Boss 1 logic
+      if (score >= GAME_CONFIG.SCORING.BOSS_SPAWN_THRESHOLD && !bossSpawnedRef.current && !bossRef.current && !boss2Ref.current) {
         bossSpawnedRef.current = true;
         setBossActive(true);
         bossRef.current = new Boss(
@@ -502,6 +508,62 @@ const BallDodgeGame = () => {
 
         if (bossRef.current.collidesWith(player)) {
           handlePlayerHit(bossRef.current.isDashing, audioSystem);
+        }
+      }
+
+      // Boss 2 logic
+      if (score >= GAME_CONFIG.SCORING.BOSS2_SPAWN_THRESHOLD && !boss2SpawnedRef.current && !boss2Ref.current && !bossRef.current) {
+        boss2SpawnedRef.current = true;
+        setBoss2Active(true);
+        boss2Ref.current = new Boss2(
+          canvas,
+          playerRef,
+          explosionsRef,
+          impactParticlesRef,
+          dangerZonesRef,
+          () => audioSystem.playExplosionSound()
+        );
+        ballsRef.current = [];
+        audioSystem.stopBackgroundMusic();
+        audioSystem.startBossMusic(() => gameOver);
+      }
+
+      if (boss2Ref.current) {
+        boss2Ref.current.update();
+        boss2Ref.current.draw(ctx);
+
+        // Check main boss collision
+        if (boss2Ref.current.collidesWith(player)) {
+          handlePlayerHit(boss2Ref.current.isDashing, audioSystem);
+        }
+
+        // Check laser collision
+        if (boss2Ref.current.checkLaserCollision(player)) {
+          handlePlayerHit(true, audioSystem);
+        }
+
+        // Check projectile collisions
+        const projectileCollisions = boss2Ref.current.checkProjectileCollisions(player);
+        if (projectileCollisions.length > 0) {
+          handlePlayerHit(false, audioSystem);
+          projectileCollisions.forEach(collision => {
+            impactParticlesRef.current.push(...createImpactParticles(collision.x, collision.y, 12, GAME_CONFIG.COLORS.BOSS2));
+          });
+        }
+
+        // Apply gravity well effect
+        const gravityEffect = boss2Ref.current.getGravityEffect(player);
+        player.x += gravityEffect.vx * 10;
+        player.y += gravityEffect.vy * 10;
+
+        // Clamp player position
+        player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+        player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+
+        // Check time distortion
+        if (boss2Ref.current.isInTimeDistortion(player)) {
+          // Player movement is already affected by time distortion in the movement code
+          // This is just for visual feedback or additional effects if needed
         }
       }
 
@@ -851,6 +913,71 @@ const BallDodgeGame = () => {
           }
         }
 
+        // Check collision with boss2
+        if (boss2Ref.current) {
+          const dx = blast.x - boss2Ref.current.x;
+          const dy = blast.y - boss2Ref.current.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < blast.radius + boss2Ref.current.radius) {
+            const defeated = boss2Ref.current.takeDamage(1);
+            setBoss2HP(boss2Ref.current.hp);
+
+            // Screen shake on boss hit
+            addScreenShake(GAME_CONFIG.SCREEN_SHAKE.BOSS_HIT_INTENSITY * 1.5);
+
+            impactParticlesRef.current.push(...createImpactParticles(blast.x, blast.y, 10, GAME_CONFIG.COLORS.BOSS2));
+
+            if (defeated) {
+              const bx = boss2Ref.current.x;
+              const by = boss2Ref.current.y;
+              setScore(prev => {
+                const newScore = prev + GAME_CONFIG.SCORING.POINTS_PER_BOSS2;
+                currentScoreRef.current = newScore;
+                return newScore;
+              });
+              setBoss2Active(false);
+              boss2Ref.current = null;
+              boss2SpawnedRef.current = false;
+              boss2DefeatedRef.current = true;
+
+              audioSystem.stopBossMusic();
+              if (musicEnabled && !audioSystem.backgroundMusicRef.current) {
+                audioSystem.startBackgroundMusic(() => gameOver);
+              }
+
+              // Epic explosion
+              for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                  const angle = (Math.PI * 2 * i) / 5;
+                  const dist = 80;
+                  explosionsRef.current.push({
+                    x: bx + Math.cos(angle) * dist,
+                    y: by + Math.sin(angle) * dist,
+                    radius: 5,
+                    maxRadius: 120,
+                    growSpeed: 6,
+                    active: true
+                  });
+                  audioSystem.playExplosionSound();
+                }, i * 100);
+              }
+
+              explosionsRef.current.push({
+                x: bx,
+                y: by,
+                radius: 5,
+                maxRadius: 250,
+                growSpeed: 8,
+                active: true
+              });
+            }
+
+            audioSystem.playExplosionSound();
+            return false;
+          }
+        }
+
         return true;
       });
     };
@@ -1045,6 +1172,8 @@ const BallDodgeGame = () => {
     setTrackingUpgrades(0);
     setBossActive(false);
     setBossHP(GAME_CONFIG.BOSS.HP);
+    setBoss2Active(false);
+    setBoss2HP(GAME_CONFIG.BOSS2.HP);
     shieldRef.current = false;
     speedUpgradesRef.current = 0;
     doubleClickUpgradesRef.current = 0;
@@ -1060,6 +1189,9 @@ const BallDodgeGame = () => {
     bossRef.current = null;
     bossSpawnedRef.current = false;
     bossDefeatedRef.current = false;
+    boss2Ref.current = null;
+    boss2SpawnedRef.current = false;
+    boss2DefeatedRef.current = false;
     dangerZonesRef.current = [];
     otherBlastsRef.current = [];
     playerRef.current = {
